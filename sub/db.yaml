@@ -103,12 +103,11 @@ Resources:
 
   DBPasswordParameter:
     Type: AWS::SSM::Parameter
+    DependsOn: !Ref DatabaseSecret
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/password
       Type: SecureString
-      Value: !Sub 
-        - '{{resolve:secretsmanager:${SecretName}:SecretString:password}}'
-        - SecretName: !Ref DatabaseSecret
+      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString::password}}'
       Description: 'Database password from Secrets Manager'
       Tags:
         Name: !Sub ${EnvironmentName}-uploader-db-password
