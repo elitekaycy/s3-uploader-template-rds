@@ -28,19 +28,6 @@ Parameters:
     Default: 'week_6_project'
 
 Resources:
-  DBPasswordParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub /${EnvironmentName}/uploader/db/password
-      Type: SecureString
-      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
-      Tier: Standard
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-uploader-db-password
-        - Key: Project
-          Value: !Ref ProjectTag
-
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -114,6 +101,17 @@ Resources:
         - Key: Project
           Value: !Ref ProjectTag
 
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${EnvironmentName}/uploader/db/password
+      Type: SecureString
+      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      Tier: Standard
+      Tags:
+        Name: !Sub ${EnvironmentName}-uploader-db-password
+        Project: !Ref ProjectTag
+
   DBHostParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -121,10 +119,8 @@ Resources:
       Type: String
       Value: !GetAtt RDSInstance.Endpoint.Address
       Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-uploader-db-host
-        - Key: Project
-          Value: !Ref ProjectTag
+        Name: !Sub ${EnvironmentName}-uploader-db-host
+        Project: !Ref ProjectTag
 
   DBPortParameter:
     Type: AWS::SSM::Parameter
@@ -133,10 +129,8 @@ Resources:
       Type: String
       Value: !GetAtt RDSInstance.Endpoint.Port
       Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-uploader-db-port
-        - Key: Project
-          Value: !Ref ProjectTag
+        Name: !Sub ${EnvironmentName}-uploader-db-port
+        Project: !Ref ProjectTag
 
   DBNameParameter:
     Type: AWS::SSM::Parameter
@@ -145,10 +139,8 @@ Resources:
       Type: String
       Value: uploader
       Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-uploader-db-name
-        - Key: Project
-          Value: !Ref ProjectTag
+        Name: !Sub ${EnvironmentName}-uploader-db-name
+        Project: !Ref ProjectTag
 
   DBUsernameParameter:
     Type: AWS::SSM::Parameter
@@ -157,10 +149,8 @@ Resources:
       Type: String
       Value: dbadmin
       Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-uploader-db-username
-        - Key: Project
-          Value: !Ref ProjectTag
+        Name: !Sub ${EnvironmentName}-uploader-db-username
+        Project: !Ref ProjectTag
 
 Outputs:
   RDSInstanceEndpoint:
@@ -168,19 +158,16 @@ Outputs:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub ${EnvironmentName}-Uploader-RDS-Endpoint
-
   RDSInstancePort:
     Description: 'RDS Instance Port'
     Value: !GetAtt RDSInstance.Endpoint.Port
     Export:
       Name: !Sub ${EnvironmentName}-Uploader-RDS-Port
-
   DatabaseSecretArn:
     Description: 'ARN of the Database Secret'
     Value: !Ref DatabaseSecret
     Export:
       Name: !Sub ${EnvironmentName}-Uploader-DB-Secret-ARN
-
   RDSSecurityGroupId:
     Description: 'RDS Security Group ID'
     Value: !Ref RDSSecurityGroup
