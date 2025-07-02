@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Default main template for Uploader web app infrastructure With Rds'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name (dev/stage/prod)'
+    Type: String
+    Default: 'dev-rds'
+
+  ECRRepoName:
+    Description: 'Name of the ECR repository for the application'
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /uploader/ecr-rds-repo-name
+
+  ProjectTag:
+    Description: 'Project identifier tag'
+    Type: String
+    Default: 'week_6_project'
+
+  TemplateBaseURL:
+    Description: 'Base S3 URL where nested templates are hosted'
+    Type: String
+    Default: 'https://dicksonanyaele-cfn-uploader-rds-dev.s3.us-east-1.amazonaws.com/templates/sub'
+
+Resources:
+  S3Stack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/s3.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        ProjectTag: !Ref ProjectTag
+
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/vpc.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        S3BucketName: !GetAtt S3Stack.Outputs.S3BucketName
+        ProjectTag: !Ref ProjectTag
+
+  RDSStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/db.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VPCId: !GetAtt VPCStack.Outputs.VPCId
+        PrivateSubnet1: !GetAtt VPCStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCStack.Outputs.PrivateSubnet2
+        VPCEndpointSecurityGroup: !GetAtt VPCStack.Outputs.VPCEndpointSecurityGroup
+        ProjectTag: !Ref ProjectTag
+
+  SecurityGroupsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/security-groups.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VPCId: !GetAtt VPCStack.Outputs.VPCId
+        ProjectTag: !Ref ProjectTag
+
+  VPCEndpointsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/vpc-endpoints.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VPCId: !GetAtt VPCStack.Outputs.VPCId
+        PrivateSubnet1: !GetAtt VPCStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCStack.Outputs.PrivateSubnet2
+        EndpointSecurityGroup: !GetAtt VPCStack.Outputs.VPCEndpointSecurityGroup
+        # PrivateRouteTable1: !GetAtt VPCStack.Outputs.PrivateRouteTable1
+        # PrivateRouteTable2: !GetAtt VPCStack.Outputs.PrivateRouteTable2
+        ProjectTag: !Ref ProjectTag
+
+  ECSClusterStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/ecs-cluster.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        ProjectTag: !Ref ProjectTag
+
+  ALBStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/alb.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        VPCId: !GetAtt VPCStack.Outputs.VPCId
+        PublicSubnet1: !GetAtt VPCStack.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt VPCStack.Outputs.PublicSubnet2
+        ALBSecurityGroup: !GetAtt SecurityGroupsStack.Outputs.ALBSecurityGroup
+        ProjectTag: !Ref ProjectTag
+
+  ECSServiceStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/ecs-service.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ALBArn: !GetAtt ALBStack.Outputs.ALBArn
+        ALBListener: !GetAtt ALBStack.Outputs.ALBListener
+        ECSSecurityGroup: !GetAtt SecurityGroupsStack.Outputs.ECSSecurityGroup
+        PrivateSubnet1: !GetAtt VPCStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt VPCStack.Outputs.PrivateSubnet2
+        S3BucketName: !GetAtt S3Stack.Outputs.S3BucketName
+        AutoScalingRoleArn: !GetAtt ECSClusterStack.Outputs.ECSAutoScalingRoleArn
+        BlueTargetGroupArn: !GetAtt ALBStack.Outputs.BlueTargetGroupArn
+        GreenTargetGroupArn: !GetAtt ALBStack.Outputs.GreenTargetGroupArn
+        VPCEndpointSecurityGroup: !GetAtt VPCStack.Outputs.VPCEndpointSecurityGroup
+        ECRRepoName: !Ref ECRRepoName
+        ProjectTag: !Ref ProjectTag
+
+
+  CODEdeployStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplateBaseURL}/codedeploy.yaml"
+      Parameters:
+        EnvironmentName: !Ref EnvironmentName
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceName: !GetAtt ECSServiceStack.Outputs.ECSServiceName
+        ECSExecutionRoleArn: !GetAtt ECSServiceStack.Outputs.ECSExecutionRoleArn
+        ECSTaskRoleArn: !GetAtt ECSServiceStack.Outputs.ECSTaskRoleArn
+        BlueTargetGroupArn: !GetAtt ALBStack.Outputs.BlueTargetGroupArn
+        GreenTargetGroupArn: !GetAtt ALBStack.Outputs.GreenTargetGroupArn
+        ALBListener: !GetAtt ALBStack.Outputs.ALBListener
+        AutoScalingRoleArn: !GetAtt ECSClusterStack.Outputs.ECSAutoScalingRoleArn
+        ProjectTag: !Ref ProjectTag
+
+  # CodePipelineStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: !Sub "${TemplateBaseURL}/pipeline.yaml"
+  #     Parameters:
+  #       EnvironmentName: !Ref EnvironmentName
+  #       ECRRepoName: !Ref ECRRepoName
+  #       S3TaskDefKey: taskdef.json
+  #       CodeDeployApplication: !GetAtt CODEdeployStack.Outputs.CodeDeployApplication
+  #       CodeDeployDeploymentGroup: !GetAtt CODEdeployStack.Outputs.CodeDeployDeploymentGroup
+  #       ProjectTag: !Ref ProjectTag
+ 
+
+Outputs:
+  ALBDNSName:
+    Description: 'DNS name of the ALB'
+    Value: !GetAtt ALBStack.Outputs.ALBDNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ALB-DNS
+
+  S3BucketName:
+    Description: 'Name of the S3 bucket for images'
+    Value: !GetAtt S3Stack.Outputs.S3BucketName
+    Export:
+      Name: !Sub ${EnvironmentName}-${AWS::StackName}-Uploader-S3-Bucket

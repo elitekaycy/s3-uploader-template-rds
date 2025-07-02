@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'vpc endpoins for stuff'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name'
+    Type: String
+
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC where the interface endpoints will be created
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: First private subnet
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Second private subnet
+
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group allowing HTTPS traffic to the VPC endpoints
+
+  ProjectTag:
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      VpcId: !Ref VPCId
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+
+  SSMMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      VpcId: !Ref VPCId
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+
+  # EC2MessagesEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+  #     VpcId: !Ref VPCId
+  #     SubnetIds:
+  #       - !Ref PrivateSubnet1
+  #       - !Ref PrivateSubnet2
+  #     SecurityGroupIds:
+  #       - !Ref EndpointSecurityGroup
+  #     VpcEndpointType: Interface
+  #     PrivateDnsEnabled: true
+
+  KMSEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.kms
+      VpcId: !Ref VPCId
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+
+Outputs:
+  SSMEndpointId:
+    Description: The ID of the VPC endpoint for SSM
+    Value: !Ref SSMEndpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-SSMEndpointId"
+
+  SSMMessagesEndpointId:
+    Description: The ID of the VPC endpoint for SSMMessages
+    Value: !Ref SSMMessagesEndpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-SSMMessagesEndpointId"
+
+  # EC2MessagesEndpointId:
+  #   Description: The ID of the VPC endpoint for EC2Messages
+  #   Value: !Ref EC2MessagesEndpoint
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-EC2MessagesEndpointId"
+
+  KMSEndpointId:
+    Description: The ID of the VPC endpoint for KMS
+    Value: !Ref KMSEndpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-KMSEndpointId"

@@ -1,0 +1,131 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ALB for Uploader application with Blue/Green Target Groups'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name'
+    Type: String
+  VPCId:
+    Description: 'VPC ID'
+    Type: AWS::EC2::VPC::Id
+  PublicSubnet1:
+    Description: 'Public Subnet 1 ID'
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnet2:
+    Description: 'Public Subnet 2 ID'
+    Type: AWS::EC2::Subnet::Id
+  ALBSecurityGroup:
+    Description: 'ALB Security Group ID'
+    Type: AWS::EC2::SecurityGroup::Id
+  ProjectTag:
+    Description: 'Project tag to group related resources'
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${EnvironmentName}-uploader-rds-alb
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-alb
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  BlueTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPCId
+      TargetType: ip
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-tg-blue
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  GreenTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPCId
+      TargetType: ip
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-tg-green
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref BlueTargetGroup 
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-alb-listener
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+Outputs:
+
+  ALBArn:
+    Description: 'ARN of the ALB'
+    Value: !Ref ALB
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ALB-ARN
+
+  ALBDNSName:
+    Description: 'DNS name of the ALB'
+    Value: !GetAtt ALB.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-${AWS::StackName}-Uploader-ALB-DNS
+
+  ALBListener:
+    Description: 'ALB Listener ARN'
+    Value: !Ref ALBListener
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ALB-Listener
+
+  BlueTargetGroupArn:
+    Description: 'Blue Target Group ARN'
+    Value: !Ref BlueTargetGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ALB-TG-Blue
+
+  GreenTargetGroupArn:
+    Description: 'Green Target Group ARN'
+    Value: !Ref GreenTargetGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ALB-TG-Green

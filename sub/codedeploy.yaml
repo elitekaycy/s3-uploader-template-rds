@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CodeDeploy setup for blue/green ECS deployments for Uploader app'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+  ECSCluster:
+    Type: String
+  ECSServiceName:
+    Type: String
+  ALBListener:
+    Type: String
+  AutoScalingRoleArn:
+    Type: String
+  ECSExecutionRoleArn:
+    Type: String
+  ECSTaskRoleArn:
+    Type: String
+  ArtifactBucket:
+    Type: String
+    Default: 's3-uploader-pipeline-dev'
+  BlueTargetGroupArn:
+    Type: String
+  GreenTargetGroupArn:
+    Type: String
+  ProjectTag:
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-uploader-codedeploy-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+        - arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS
+      Policies:
+        - PolicyName: ECSCodeDeployExtraPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:CreateTaskSet
+                  - ecs:UpdateServicePrimaryTaskSet
+                  - ecs:DeleteTaskSet
+                  - ecs:DescribeTaskDefinition
+                  - ecs:RegisterTaskDefinition
+                  - ecs:DeregisterTaskDefinition
+                  - ecs:DescribeTasks
+                  - ecs:RunTask
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeListeners
+                  - elasticloadbalancing:ModifyListener
+                  - elasticloadbalancing:DescribeRules
+                  - elasticloadbalancing:ModifyRule
+                  - elasticloadbalancing:CreateRule
+                  - elasticloadbalancing:DeleteRule
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !Ref AutoScalingRoleArn
+                  - !Ref ECSExecutionRoleArn
+                  - !Ref ECSTaskRoleArn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                  - s3:PutObject
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-codedeploy-role
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub ${EnvironmentName}-uploader-codedeploy-app
+      ComputePlatform: ECS
+
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    DependsOn:
+      - CodeDeployRole
+      - CodeDeployApplication
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub ${EnvironmentName}-uploader-deployment-group
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+      DeploymentConfigName: CodeDeployDefault.ECSAllAtOnce
+      DeploymentStyle:
+        DeploymentType: BLUE_GREEN
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      BlueGreenDeploymentConfiguration:
+        TerminateBlueInstancesOnDeploymentSuccess:
+          Action: TERMINATE
+          TerminationWaitTimeInMinutes: 5
+        DeploymentReadyOption:
+          ActionOnTimeout: CONTINUE_DEPLOYMENT
+          WaitTimeInMinutes: 0
+      LoadBalancerInfo:
+        TargetGroupPairInfoList:
+          - ProdTrafficRoute:
+              ListenerArns:
+                - !Ref ALBListener
+            TargetGroups:
+              - Name: !Select [1, !Split ["/", !Select [5, !Split [":", !Ref BlueTargetGroupArn]]]]
+              - Name: !Select [1, !Split ["/", !Select [5, !Split [":", !Ref GreenTargetGroupArn]]]]
+      ECSServices:
+        - ClusterName: !Ref ECSCluster
+          ServiceName: !Ref ECSServiceName
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-deployment-group
+        - Key: Project
+          Value: !Ref ProjectTag
+
+Outputs:
+  CodeDeployDeploymentGroup:
+    Description: 'Deployment Group for ECS Blue/Green'
+    Value: !Ref CodeDeployDeploymentGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-CodeDeploy-DeploymentGroup
+
+  CodeDeployApplication:
+    Description: 'CodeDeploy Application for ECS Blue/Green'
+    Value: !Ref CodeDeployApplication
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-CodeDeploy-Application
+

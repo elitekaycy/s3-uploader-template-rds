@@ -1,0 +1,4 @@
+template-file-path: main.yaml
+parameters: {}
+tags:
+  Project: week_6_project

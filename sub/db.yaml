@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RDS PostgreSQL with Multi-AZ and Secrets Management'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name'
+    Type: String
+
+  VPCId:
+    Description: 'VPC ID'
+    Type: AWS::EC2::VPC::Id
+
+  PrivateSubnet1:
+    Description: 'Private Subnet 1 ID'
+    Type: AWS::EC2::Subnet::Id
+
+  PrivateSubnet2:
+    Description: 'Private Subnet 2 ID'
+    Type: AWS::EC2::Subnet::Id
+
+  VPCEndpointSecurityGroup:
+    Description: 'Security Group ID for VPC endpoints'
+    Type: AWS::EC2::SecurityGroup::Id
+
+  ProjectTag:
+    Description: 'Project tag to group related resources'
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${EnvironmentName}/uploader/db/password
+      Type: SecureString
+      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      Tier: Standard
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-password
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${EnvironmentName}/uploader/rds/credentials
+      Description: 'RDS PostgreSQL credentials for Uploader application'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-secret
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS PostgreSQL'
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref VPCEndpointSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-rds-sg
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS PostgreSQL'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-subnet-group
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: postgres
+      EngineVersion: '14.4'
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-uploader-db
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      DBName: uploader
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+      MultiAZ: true
+      PubliclyAccessible: false
+      StorageType: gp2
+      BackupRetentionPeriod: 7
+      StorageEncrypted: true
+      DeletionProtection: true
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-postgres
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  DBHostParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${EnvironmentName}/uploader/db/host
+      Type: String
+      Value: !GetAtt RDSInstance.Endpoint.Address
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-host
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  DBPortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${EnvironmentName}/uploader/db/port
+      Type: String
+      Value: !GetAtt RDSInstance.Endpoint.Port
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-port
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  DBNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${EnvironmentName}/uploader/db/name
+      Type: String
+      Value: uploader
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-name
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  DBUsernameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${EnvironmentName}/uploader/db/username
+      Type: String
+      Value: dbadmin
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-db-username
+        - Key: Project
+          Value: !Ref ProjectTag
+
+Outputs:
+  RDSInstanceEndpoint:
+    Description: 'RDS Instance Endpoint'
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-RDS-Endpoint
+
+  RDSInstancePort:
+    Description: 'RDS Instance Port'
+    Value: !GetAtt RDSInstance.Endpoint.Port
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-RDS-Port
+
+  DatabaseSecretArn:
+    Description: 'ARN of the Database Secret'
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-DB-Secret-ARN
+
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID'
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-RDS-SG

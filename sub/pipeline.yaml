@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CodePipeline to deploy to ECS using CodeDeploy on ECR image push (codedeploy-bundle.zip in S3)
+
+Parameters:
+  EnvironmentName:
+    Type: String
+  ArtifactBucket:
+    Type: String
+    Default: 's3-uploader-pipeline-dev'
+  ECRRepoName:
+    Type: String
+  S3TaskDefKey:
+    Type: String
+    Default: 'taskdef.json'
+  CodeDeployApplication:
+    Type: String
+  CodeDeployDeploymentGroup:
+    Type: String
+  ProjectTag:
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-uploader-pipeline-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                  - s3:PutObject
+                Resource: 
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+                  - !Sub arn:aws:s3:::${ArtifactBucket}
+              - Effect: Allow
+                Action:
+                  - codedeploy:CreateDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetApplicationRevision
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetDeploymentConfig
+                  - codedeploy:RegisterApplicationRevision
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:DescribeImages
+                Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ECRRepoName}
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-pipeline-role
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EnvironmentName}-eventbridge-pipeline-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StartPipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:StartPipelineExecution
+                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${EnvironmentName}-uploader-pipeline
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-eventbridge-pipeline-role
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${EnvironmentName}-uploader-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceZip
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: S3
+                Version: 1
+              Configuration:
+                S3Bucket: !Ref ArtifactBucket
+                S3ObjectKey: codedeploy-bundle.zip
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceOutput
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: DeployToECS
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: 1
+              InputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Ref CodeDeployDeploymentGroup
+              RunOrder: 1
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-pipeline
+        - Key: Project
+          Value: !Ref ProjectTag
+
+
+  ECRPushEvent:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: !Sub Trigger pipeline when new image is pushed to ${ECRRepoName}
+      EventPattern:
+        source:
+          - aws.ecr
+        detail-type:
+          - ECR Image Action
+        detail:
+          action-type:
+            - PUSH
+          result:
+            - SUCCESS
+          repository-name:
+            - !Ref ECRRepoName
+          image-tag:
+            - latest
+      Targets:
+        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${EnvironmentName}-uploader-pipeline
+          Id: codepipeline
+          RoleArn: !GetAtt EventBridgeRole.Arn
+
+Outputs:
+  PipelineName:
+    Value: !Ref Pipeline
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-CodePipeline

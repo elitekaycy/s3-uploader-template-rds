@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Security groups for Uploader application'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name'
+    Type: String
+  VPCId:
+    Description: 'VPC ID'
+    Type: AWS::EC2::VPC::Id
+  ProjectTag:
+    Description: 'project resource tag'
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Uploader ALB'
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-alb-sg
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Uploader ECS tasks'
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-sg
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+Outputs:
+  ALBSecurityGroup:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ALB-SG
+  ECSSecurityGroup:
+    Description: 'ECS Security Group ID'
+    Value: !Ref ECSSecurityGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ECS-SG

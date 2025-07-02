@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 bucket for Uploader application images'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name'
+    Type: String
+
+  UploaderUserArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /uploader/allowed-iam-user
+
+  ProjectTag:
+    Description: 'Tag to group all resources in this project'
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${EnvironmentName}-uploader-images-${AWS::AccountId}
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldImages
+            Status: Enabled
+            ExpirationInDays: 365
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-images-bucket
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowReadAccessToElitekaycy
+            Effect: Allow
+            Principal:
+              AWS: !Ref UploaderUserArn 
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+            Resource:
+              - !Sub "arn:aws:s3:::${S3Bucket}"
+              - !Sub "arn:aws:s3:::${S3Bucket}/*"
+
+Outputs:
+  S3BucketName:
+    Description: 'Name of the S3 bucket'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-S3-Bucket

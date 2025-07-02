@@ -1,0 +1,300 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Service for Uploader application'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name'
+    Type: String
+  ECSCluster:
+    Description: 'ECS Cluster Name'
+    Type: String
+  ALBArn:
+    Description: 'ARN of the ALB'
+    Type: String
+  ALBListener:
+    Description: 'ALB Listener ARN'
+    Type: String
+  ECSSecurityGroup:
+    Description: 'ECS Security Group ID'
+    Type: AWS::EC2::SecurityGroup::Id
+  PrivateSubnet1:
+    Description: 'Private Subnet 1 ID'
+    Type: AWS::EC2::Subnet::Id
+  PrivateSubnet2:
+    Description: 'Private Subnet 2 ID'
+    Type: AWS::EC2::Subnet::Id
+  S3BucketName:
+    Description: 'Name of the S3 bucket for images'
+    Type: String
+  ECRRepoName:
+    Description: 'Name of the ECR repository for the application'
+    Type: String
+  BlueTargetGroupArn:
+    Type: String
+    Description: "ARN of the Blue Target Group"
+  GreenTargetGroupArn:
+    Type: String
+    Description: "ARN of the Green Target Group"
+  AutoScalingRoleArn:
+    Description: 'ARN of the IAM Role for ECS Auto Scaling'
+    Type: String
+  VPCEndpointSecurityGroup:
+    Description: 'Security Group ID for VPC endpoints'
+    Type: AWS::EC2::SecurityGroup::Id
+  ProjectTag:
+    Description: 'Project tag to group related resources'
+    Type: String
+    Default: 'week_6_project'
+
+Resources:        
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: uploader-ecs-execution-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'ecr:DescribeRepositories'
+                  - 'ecr:ListImages'
+                  - 'ecr:DescribeImages'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+        - PolicyName: AllowSSMAccessForSecrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParameter'
+                  - 'kms:Decrypt' 
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/scale-app/dev/aws/*
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-exec-role
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: uploader-s3-access-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Sub arn:aws:s3:::${S3BucketName}
+                  - !Sub arn:aws:s3:::${S3BucketName}/*
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParameter'
+                  - 'kms:Decrypt'
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/scale-app/dev/aws/*
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-task-role
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${EnvironmentName}-uploader-rds-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 256
+      Memory: 512
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub ${EnvironmentName}-uploader-container
+          HealthCheck:
+            Command:
+              - "CMD-SHELL"
+              - "curl -f http://localhost:8080/health || exit 1" 
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepoName}:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: ENVIRONMENT
+              Value: !Ref EnvironmentName
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_S3_BUCKET
+              Value: !Ref S3BucketName
+            - Name: POSTGRES_HOST
+              Value: !Sub '{{resolve:ssm:${EnvironmentName}/uploader/db/host}}'
+            - Name: POSTGRES_PORT
+              Value: !Sub '{{resolve:ssm:${EnvironmentName}/uploader/db/port}}'
+            - Name: POSTGRES_DB
+              Value: !Sub '{{resolve:ssm:${EnvironmentName}/uploader/db/name}}'
+          Secrets:
+            - Name: AWS_ACCESS_KEY
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/scale-app/dev/aws/access_key
+            - Name: AWS_SECRET_KEY
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/scale-app/dev/aws/secret_key
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EnvironmentName}/uploader/db/password
+            - Name: POSTGRES_USER
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EnvironmentName}/uploader/db/username
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+              awslogs-stream-prefix: !Sub ${EnvironmentName}-ecs
+              awslogs-create-group: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-rds-task-def
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${EnvironmentName}-uploader-service
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-logs
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${EnvironmentName}-uploader-rds-service
+      Cluster: !Ref ECSCluster
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentController:
+        Type: CODE_DEPLOY
+      DesiredCount: 2
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+            - !Ref VPCEndpointSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+      TaskDefinition: !Ref ECSTaskDefinition
+      LoadBalancers:
+        - ContainerName: !Sub ${EnvironmentName}-uploader-container
+          ContainerPort: 8080
+          TargetGroupArn: !Ref BlueTargetGroupArn
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-service
+        - Key: Project
+          Value: !Ref ProjectTag 
+
+  ECSServiceAutoScaling:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: ECSService
+    Properties:
+      MaxCapacity: 4
+      MinCapacity: 2
+      ResourceId: !Sub service/${ECSCluster}/${EnvironmentName}-uploader-rds-service
+      RoleARN: !Ref AutoScalingRoleArn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  CPUUtilizationScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${EnvironmentName}-uploader-cpu-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ECSServiceAutoScaling
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 50
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+
+Outputs:
+  ECSService:
+    Description: 'ECS Service Name'
+    Value: !Ref ECSService
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ECS-Service
+
+  ECSServiceName:
+    Description: 'ECS Service Name'
+    Value: !Sub ${EnvironmentName}-uploader-service
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ECS-Service-Name
+
+  ECSTaskDefinitionArn:
+    Description: 'ARN of the ECS Task Definition'
+    Value: !Ref ECSTaskDefinition
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-Task-Def
+
+  ECSExecutionRoleArn:
+    Description: 'ARN of the ECS Execution Role'
+    Value: !GetAtt ECSExecutionRole.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ECS-Execution-Role
+
+  ECSTaskRoleArn:
+    Description: 'ARN of the ECS Task Role'
+    Value: !GetAtt ECSTaskRole.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ECS-Task-Role

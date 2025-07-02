@@ -1,0 +1,52 @@
+name: Sync CloudFormation Sub Templates to S3
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  upload-sub-templates:
+    name: Upload Sub Templates to S3
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      S3_BUCKET: dicksonanyaele-cfn-uploader-rds-dev
+      S3_PREFIX: templates/sub/
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync templates in sub/ to S3
+        run: |
+          aws s3 sync sub/ s3://$S3_BUCKET/$S3_PREFIX \
+            --exclude "*" \
+            --include "*.yaml" \
+            --include "*.yml"
+
+      - name: Zip CodeDeploy files
+        run: |
+          cd pipeline
+          zip ../codedeploy-bundle.zip appspec.yml taskdef.json
+
+      - name: Upload codedeploy-bundle.zip to S3
+        run: |
+          aws s3 cp codedeploy-bundle.zip s3://s3-uploader-pipeline-dev/codedeploy-bundle.zip
+ 
+      - name: Print uploaded Template URLs
+        run: |
+          echo "Templates uploaded to:"
+          find sub -name "*.yaml" -o -name "*.yml" | while read file; do
+            filename=$(basename "$file")
+            echo "https://$S3_BUCKET.s3.amazonaws.com/$S3_PREFIX$filename"
+          done
+

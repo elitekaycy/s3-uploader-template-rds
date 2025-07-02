@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Cluster for Uploader application with Fargate capacity providers'
+
+Parameters:
+  EnvironmentName:
+    Description: 'Application environment name (dev, staging, prod)'
+    Type: String
+    Default: 'dev'
+
+  ProjectTag:
+    Description: 'Project tag to group related resources'
+    Type: String
+    Default: 'week_6_project'
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${EnvironmentName}-${AWS::StackName}-uploader-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-cluster
+        - Key: Project
+          Value: !Ref ProjectTag
+
+  ECSAutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [application-autoscaling.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+      Policies:
+        - PolicyName: uploader-service-autoscaling
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-uploader-ecs-autoscaling-role
+        - Key: Project
+          Value: !Ref ProjectTag
+
+Outputs:
+  ECSCluster:
+    Description: 'ECS Cluster Name'
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${EnvironmentName}-${AWS::StackName}-Uploader-ECS-Cluster
+  ECSAutoScalingRoleArn:
+    Description: "Auto Scaling IAM Role ARN"
+    Value: !GetAtt ECSAutoScalingRole.Arn
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-ECSAutoScalingRoleArn
+
+
