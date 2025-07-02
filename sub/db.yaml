@@ -111,10 +111,9 @@ Resources:
       Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString::password}}'
       Description: 'Database password from Secrets Manager'
       Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-uploader-db-password
-        - Key: Project
-          Value: !Ref ProjectTag
+        Name: !Sub ${EnvironmentName}-uploader-db-password
+        Project: !Ref ProjectTag
+
 
   DBHostParameter:
     Type: AWS::SSM::Parameter
