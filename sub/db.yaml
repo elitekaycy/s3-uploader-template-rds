@@ -97,6 +97,8 @@ Resources:
       BackupRetentionPeriod: 7
       StorageEncrypted: true
       DeletionProtection: false
+      DeletionAutomatedBackups: true
+      skipFinalSnapshot: true
       EnablePerformanceInsights: true
       PerformanceInsightsRetentionPeriod: 7
       Tags:
