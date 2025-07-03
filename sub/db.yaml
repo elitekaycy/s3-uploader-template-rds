@@ -96,7 +96,7 @@ Resources:
       StorageType: gp2
       BackupRetentionPeriod: 7
       StorageEncrypted: true
-      DeletionProtection: true
+      DeletionProtection: false
       EnablePerformanceInsights: true
       PerformanceInsightsRetentionPeriod: 7
       Tags:
