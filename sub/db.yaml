@@ -75,6 +75,10 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: 
+      - DatabaseSecret
+      - DBSubnetGroup
+      - RDSSecurityGroup
     Properties:
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
@@ -137,6 +141,7 @@ Resources:
 
   DBNameParameter:
     Type: AWS::SSM::Parameter
+    DependsOn: DatabaseSecret
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/name
       Type: String
@@ -147,6 +152,7 @@ Resources:
 
   DBUsernameParameter:
     Type: AWS::SSM::Parameter
+    DependsOn: DatabaseSecret
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/username
       Type: String
