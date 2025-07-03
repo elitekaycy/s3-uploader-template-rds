@@ -75,6 +75,7 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     DependsOn: 
       - DatabaseSecret
       - DBSubnetGroup
@@ -97,6 +98,7 @@ Resources:
       BackupRetentionPeriod: 7
       StorageEncrypted: true
       DeletionProtection: false
+      DeleteAutomatedBackups: true
       EnablePerformanceInsights: true
       PerformanceInsightsRetentionPeriod: 7
       Tags:
