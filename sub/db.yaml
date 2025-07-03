@@ -83,7 +83,7 @@ Resources:
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '14.4'
+      EngineVersion: '14.18'
       DBInstanceIdentifier: !Sub ${EnvironmentName}-uploader-db
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
@@ -105,22 +105,21 @@ Resources:
         - Key: Project
           Value: !Ref ProjectTag
 
-
   DBPasswordParameter:
     Type: AWS::SSM::Parameter
-    DependsOn: DatabaseSecret
+    DependsOn: RDSInstance 
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/password
       Type: String
-      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString::password}}'
+      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'  
       Description: 'Database password from Secrets Manager'
       Tags:
         Name: !Sub ${EnvironmentName}-uploader-db-password
         Project: !Ref ProjectTag
 
-
   DBHostParameter:
     Type: AWS::SSM::Parameter
+    DependsOn: RDSInstance
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/host
       Type: String
@@ -131,6 +130,7 @@ Resources:
 
   DBPortParameter:
     Type: AWS::SSM::Parameter
+    DependsOn: RDSInstance
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/port
       Type: String
@@ -141,7 +141,7 @@ Resources:
 
   DBNameParameter:
     Type: AWS::SSM::Parameter
-    DependsOn: DatabaseSecret
+    DependsOn: RDSInstance
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/name
       Type: String
@@ -152,7 +152,7 @@ Resources:
 
   DBUsernameParameter:
     Type: AWS::SSM::Parameter
-    DependsOn: DatabaseSecret
+    DependsOn: RDSInstance
     Properties:
       Name: !Sub /${EnvironmentName}/uploader/db/username
       Type: String
