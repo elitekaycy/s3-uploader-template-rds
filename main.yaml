@@ -113,6 +113,10 @@ Resources:
         GreenTargetGroupArn: !GetAtt ALBStack.Outputs.GreenTargetGroupArn
         VPCEndpointSecurityGroup: !GetAtt VPCStack.Outputs.VPCEndpointSecurityGroup
         ECRRepoName: !Ref ECRRepoName
+        DBHost: !GetAtt RDSStack.Outputs.RDSInstanceEndpoint
+        DBPort: !GetAtt RDSStack.Outputs.RDSInstancePort
+        DBName: !GetAtt RDSStack.Outputs.DatabaseName
+        DBSecretArn: !GetAtt RDSStack.Outputs.DatabaseSecretArn
         ProjectTag: !Ref ProjectTag
 
 

@@ -45,6 +45,18 @@ Parameters:
     Description: 'Project tag to group related resources'
     Type: String
     Default: 'week_6_project'
+  DBHost:
+    Type: String
+    Description: "Database host from RDS stack"
+  DBPort: 
+    Type: String
+    Description: "Database port from RDS stack"
+  DBName:
+    Type: String
+    Description: "Database name from RDS stack"
+  DBSecretArn:
+    Type: String
+    Description: "Database secret ARN from RDS stack"
 
 Resources:        
   ECSExecutionRole:
@@ -175,11 +187,11 @@ Resources:
             - Name: AWS_S3_BUCKET
               Value: !Ref S3BucketName
             - Name: POSTGRES_HOST
-              Value: !Sub '{{resolve:ssm:${EnvironmentName}/uploader/db/host}}'
+              Value: !Ref DBHost
             - Name: POSTGRES_PORT
-              Value: !Sub '{{resolve:ssm:${EnvironmentName}/uploader/db/port}}'
+              Value: !Ref DBPort
             - Name: POSTGRES_DB
-              Value: !Sub '{{resolve:ssm:${EnvironmentName}/uploader/db/name}}'
+              Value: !Ref DBName
           Secrets:
             - Name: AWS_ACCESS_KEY
               ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/scale-app/dev/aws/access_key

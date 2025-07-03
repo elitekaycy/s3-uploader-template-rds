@@ -169,16 +169,25 @@ Outputs:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub ${EnvironmentName}-Uploader-RDS-Endpoint
+      
   RDSInstancePort:
     Description: 'RDS Instance Port'
     Value: !GetAtt RDSInstance.Endpoint.Port
     Export:
       Name: !Sub ${EnvironmentName}-Uploader-RDS-Port
+      
+  DatabaseName:
+    Description: 'RDS Database Name'
+    Value: uploader
+    Export:
+      Name: !Sub ${EnvironmentName}-Uploader-DB-Name
+      
   DatabaseSecretArn:
     Description: 'ARN of the Database Secret'
     Value: !Ref DatabaseSecret
     Export:
       Name: !Sub ${EnvironmentName}-Uploader-DB-Secret-ARN
+      
   RDSSecurityGroupId:
     Description: 'RDS Security Group ID'
     Value: !Ref RDSSecurityGroup
