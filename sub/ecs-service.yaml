@@ -100,6 +100,7 @@ Resources:
                   - 'kms:Decrypt' 
                 Resource:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/scale-app/dev/aws/*
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EnvironmentName}/uploader/db/username
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-uploader-ecs-exec-role

@@ -136,6 +136,7 @@ Resources:
         AutoScalingRoleArn: !GetAtt ECSClusterStack.Outputs.ECSAutoScalingRoleArn
         ProjectTag: !Ref ProjectTag
 
+
   # CodePipelineStack:
   #   Type: AWS::CloudFormation::Stack
   #   Properties:
