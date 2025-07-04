@@ -233,7 +233,7 @@ Resources:
     Properties:
       ServiceName: !Sub ${EnvironmentName}-uploader-rds-service
       Cluster: !Ref ECSCluster
-      HealthCheckGracePeriodSeconds: 60
+      HealthCheckGracePeriodSeconds: 120
       DeploymentController:
         Type: CODE_DEPLOY
       DesiredCount: 2
