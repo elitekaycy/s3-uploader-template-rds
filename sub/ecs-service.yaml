@@ -231,7 +231,7 @@ Resources:
   ECSService:
     Type: AWS::ECS::Service
     Properties:
-      ServiceName: !Sub ${EnvironmentName}-uploader-rds-service
+      ServiceName: !Sub ${EnvironmentName}-uploader-service
       Cluster: !Ref ECSCluster
       HealthCheckGracePeriodSeconds: 120
       DeploymentController:
