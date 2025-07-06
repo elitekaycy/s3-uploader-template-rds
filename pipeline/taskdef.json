@@ -1,15 +1,15 @@
 {
-  "family": "dev-uploader-task",
+  "family": "dev-rds-uploader-rds-task",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
-  "executionRoleArn": "arn:aws:iam::205930614431:role/s3-uploader-template-ECSServiceSta-ECSExecutionRole-Sb3v2L9imAuC",
-  "taskRoleArn": "arn:aws:iam::205930614431:role/s3-uploader-template-ECSServiceStack-Y4-ECSTaskRole-vPtKLi1qulMa",
+  "executionRoleArn": "arn:aws:iam::205930614431:role/s3-uploader-rds-template-ECSServic-ECSExecutionRole-iyEEX9ej6zZK",
+  "taskRoleArn": "arn:aws:iam::205930614431:role/s3-uploader-rds-template-ECSServiceStac-ECSTaskRole-wBw345hMNRYc",
   "containerDefinitions": [
     {
-      "name": "dev-uploader-container",
-      "image": "205930614431.dkr.ecr.eu-central-1.amazonaws.com/uploader-repo:latest",
+      "name": "dev-rds-uploader-container",
+      "image": "205930614431.dkr.ecr.eu-central-1.amazonaws.com/uploader-rds-repo:latest",
       "essential": true,
       "portMappings": [
         {
@@ -20,9 +20,12 @@
       ],
       "environment": [
         { "name": "AWS_REGION", "value": "eu-central-1" },
-        { "name": "AWS_S3_BUCKET", "value": "dev-uploader-images-205930614431" },
-        { "name": "S3_BUCKET_NAME", "value": "dev-uploader-images-205930614431" },
-        { "name": "ENVIRONMENT", "value": "dev" }
+        { "name": "AWS_S3_BUCKET", "value": "dev-rds-uploader-images-205930614431" },
+        { "name": "S3_BUCKET_NAME", "value": "dev-rds-uploader-images-205930614431" },
+        { "name": "ENVIRONMENT", "value": "dev-rds" },
+        { "name": "POSTGRES_HOST", "value": "dev-rds-uploader-db.cxqywu66wqt9.eu-central-1.rds.amazonaws.com" },
+        { "name": "POSTGRES_PORT", "value": "5432" },
+        { "name": "POSTGRES_DB", "value": "uploader" }
       ],
       "secrets": [
         {
@@ -32,17 +35,35 @@
         {
           "name": "AWS_SECRET_KEY",
           "valueFrom": "arn:aws:ssm:eu-central-1:205930614431:parameter/scale-app/dev/aws/secret_key"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "valueFrom": "arn:aws:ssm:eu-central-1:205930614431:parameter/dev-rds/uploader/db/username"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:ssm:eu-central-1:205930614431:parameter/dev-rds/uploader/db/password"
         }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/dev-uploader-service",
+          "awslogs-group": "/ecs/dev-rds-uploader-service",
+          "awslogs-create-group": "true",
           "awslogs-region": "eu-central-1",
-          "awslogs-stream-prefix": "ecs"
+          "awslogs-stream-prefix": "dev-rds-ecs"
         }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "/bin/sh -c 'curl -f http://localhost:8080/health || exit 1'"
+        ],
+        "interval": 60,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 120
       }
     }
   ]
 }
-
