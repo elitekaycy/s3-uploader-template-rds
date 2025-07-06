@@ -264,7 +264,7 @@ Resources:
     Properties:
       MaxCapacity: 4
       MinCapacity: 2
-      ResourceId: !Sub service/${ECSCluster}/${EnvironmentName}-uploader-rds-service
+      ResourceId: !Sub service/${ECSCluster}/${EnvironmentName}-uploader-service
       RoleARN: !Ref AutoScalingRoleArn
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
